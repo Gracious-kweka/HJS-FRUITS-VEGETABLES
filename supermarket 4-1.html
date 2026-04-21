@@ -1,0 +1,436 @@
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HJS Supermarket - Advanced Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        [x-cloak] { display: none !important; }
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-5px); }
+    </style>
+</head>
+<body x-data="hjsApp()" x-init="init()">
+
+    <div x-show="!isLoggedIn" class="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-extrabold text-slate-800">HJS <span class="text-green-600">FRUITS & VEGETABLES</span></h1>
+                <p class="text-gray-500">Inventory & Analytics System</p>
+            </div>
+            <div class="space-y-4">
+                <input type="text" x-model="loginForm.user" placeholder="Username" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none">
+                <input type="password" x-model="loginForm.pass" placeholder="Password" class="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none">
+                <button @click="login()" class="w-full bg-slate-800 text-white font-bold py-3 rounded-lg hover:bg-slate-700 transition">SIGN IN</button>
+                <p x-show="loginError" class="text-red-500 text-sm text-center">Invalid Credentials</p>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="isLoggedIn" x-cloak class="min-h-screen flex flex-col md:flex-row">
+       
+        <nav class="w-full md:w-64 bg-slate-900 text-white p-6">
+            <div class="mb-10 text-center">
+                <h2 class="text-2xl font-bold text-white">HJS <span class="text-green-500">Supermarket</span></h2>
+            </div>
+            <div class="space-y-3">
+                <button @click="view = 'dashboard'" :class="view === 'dashboard' ? 'bg-green-600' : 'hover:bg-slate-800'" class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">📊 Dashboard</button>
+                <button @click="view = 'sales'" :class="view === 'sales' ? 'bg-green-600' : 'hover:bg-slate-800'" class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">🛒 New Sale</button>
+                <button @click="view = 'purchases'" :class="view === 'purchases' ? 'bg-green-600' : 'hover:bg-slate-800'" class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">📥 New Purchase</button>
+               
+                <template x-if="role === 'admin'">
+                    <div class="pt-4 border-t border-slate-700 mt-4 space-y-3">
+                        <p class="text-xs text-slate-500 font-bold uppercase px-4">Manager Tools</p>
+                        <button @click="view = 'inventory_mgmt'" :class="view === 'inventory_mgmt' ? 'bg-orange-600' : 'hover:bg-slate-800'" class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">📦 Manage Inventory</button>
+                        <button @click="view = 'insights'" :class="view === 'insights' ? 'bg-indigo-600' : 'hover:bg-slate-800'" class="w-full text-left px-4 py-3 rounded-lg flex items-center gap-3">📈 Manager Insights</button>
+                    </div>
+                </template>
+            </div>
+            <button @click="logout()" class="mt-20 w-full text-red-400 border border-red-400/30 py-2 rounded hover:bg-red-500 hover:text-white transition">Logout</button>
+        </nav>
+
+        <main class="flex-1 p-6 md:p-10 bg-gray-50 overflow-y-auto">
+           
+            <section x-show="view === 'insights' && role === 'admin'">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                    <div>
+                        <h2 class="text-3xl font-bold text-slate-800">Financial Insights</h2>
+                        <p class="text-slate-500">Comprehensive sales and purchase tracking</p>
+                    </div>
+                    <div class="flex bg-white rounded-lg shadow p-1 border">
+                        <template x-for="t in ['Daily', 'Weekly', 'Monthly', 'Yearly']">
+                            <button @click="timeFrame = t"
+                                    :class="timeFrame === t ? 'bg-indigo-600 text-white' : 'text-slate-600'"
+                                    class="px-6 py-2 rounded-md text-sm font-bold transition" x-text="t"></button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                    <div class="bg-white p-8 rounded-2xl shadow-sm border-l-8 border-green-500">
+                        <p class="text-slate-400 font-bold uppercase text-sm mb-1" x-text="timeFrame + ' TOTAL SALES'"></p>
+                        <h3 class="text-4xl font-black text-slate-800">TSH <span x-text="formatMoney(getFilteredTotal('sales'))"></span></h3>
+                    </div>
+                    <div class="bg-white p-8 rounded-2xl shadow-sm border-l-8 border-red-500">
+                        <p class="text-slate-400 font-bold uppercase text-sm mb-1" x-text="timeFrame + ' TOTAL PURCHASES'"></p>
+                        <h3 class="text-4xl font-black text-slate-800">TSH <span x-text="formatMoney(getFilteredTotal('purchases'))"></span></h3>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-10">
+                    <div class="bg-white rounded-2xl shadow-sm overflow-hidden border">
+                        <div class="p-6 border-b bg-slate-50 flex justify-between items-center">
+                            <h4 class="font-bold text-slate-800">Individual Sales Records (<span x-text="timeFrame"></span>)</h4>
+                            <span class="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full font-bold">Income</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-white border-b">
+                                    <tr class="text-slate-400 text-xs uppercase">
+                                        <th class="p-4">Date</th>
+                                        <th class="p-4">Location</th>
+                                        <th class="p-4">Item</th>
+                                        <th class="p-4">Qty</th>
+                                        <th class="p-4 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="sale in getFilteredRecords('sales')" :key="sale.id">
+                                        <tr class="border-b hover:bg-slate-50 transition">
+                                            <td class="p-4 text-sm" x-text="new Date(sale.date).toLocaleDateString()"></td>
+                                            <td class="p-4 font-medium text-slate-700" x-text="sale.location"></td>
+                                            <td class="p-4 text-slate-600 text-sm" x-text="sale.itemName"></td>
+                                            <td class="p-4 text-sm" x-text="sale.qty + ' ' + sale.unit"></td>
+                                            <td class="p-4 text-right font-bold text-green-600" x-text="formatMoney(sale.total)"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm overflow-hidden border">
+                        <div class="p-6 border-b bg-slate-50 flex justify-between items-center">
+                            <h4 class="font-bold text-slate-800">Individual Purchase Records (<span x-text="timeFrame"></span>)</h4>
+                            <span class="text-xs bg-red-100 text-red-700 px-3 py-1 rounded-full font-bold">Expense</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-white border-b">
+                                    <tr class="text-slate-400 text-xs uppercase">
+                                        <th class="p-4">Date</th>
+                                        <th class="p-4">Item Name</th>
+                                        <th class="p-4 text-center">Quantity</th>
+                                        <th class="p-4 text-right">Total Cost</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="p in getFilteredRecords('purchases')" :key="p.id">
+                                        <tr class="border-b hover:bg-slate-50 transition">
+                                            <td class="p-4 text-sm" x-text="new Date(p.date).toLocaleDateString()"></td>
+                                            <td class="p-4 font-medium text-slate-700" x-text="p.name"></td>
+                                            <td class="p-4 text-center text-sm" x-text="p.qty"></td>
+                                            <td class="p-4 text-right font-bold text-red-600" x-text="formatMoney(p.total)"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section x-show="view === 'inventory_mgmt' && role === 'admin'">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h2 class="text-3xl font-bold text-slate-800">Inventory Management</h2>
+                        <p class="text-slate-500">Update the master product list</p>
+                    </div>
+                    <button @click="openInventoryModal()" class="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700"> + Add New Item</button>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm overflow-hidden border">
+                    <table class="w-full text-left">
+                        <thead class="bg-slate-50 border-b">
+                            <tr class="text-slate-400 text-xs uppercase">
+                                <th class="p-4">Item</th><th class="p-4">Unit</th><th class="p-4">Price</th><th class="p-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(item, index) in inventory" :key="index">
+                                <tr class="border-b hover:bg-slate-50">
+                                    <td class="p-4 font-medium text-slate-700" x-text="item.name"></td>
+                                    <td class="p-4 text-slate-600" x-text="item.unit"></td>
+                                    <td class="p-4 font-bold text-slate-800" x-text="'TSH ' + formatMoney(item.price)"></td>
+                                    <td class="p-4 text-right space-x-2">
+                                        <button @click="editInventoryItem(index)" class="text-indigo-600 font-bold">Edit</button>
+                                        <button @click="deleteInventoryItem(index)" class="text-red-500 font-bold">Delete</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div x-show="showInvModal" class="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+                    <div class="bg-white p-8 rounded-2xl w-full max-w-md">
+                        <h3 class="text-xl font-bold mb-4" x-text="editingIndex === null ? 'Add New Item' : 'Edit Item'"></h3>
+                        <div class="space-y-4">
+                            <input type="text" x-model="invForm.name" placeholder="Name" class="w-full p-3 border rounded-lg">
+                            <input type="text" x-model="invForm.unit" placeholder="Unit (KG/PCS)" class="w-full p-3 border rounded-lg">
+                            <input type="number" x-model="invForm.price" placeholder="Price" class="w-full p-3 border rounded-lg">
+                            <div class="flex gap-3">
+                                <button @click="saveInventoryItem()" class="flex-1 bg-slate-800 text-white py-3 rounded-lg font-bold">Save</button>
+                                <button @click="showInvModal = false" class="flex-1 bg-gray-200 text-slate-700 py-3 rounded-lg font-bold">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section x-show="view === 'dashboard'">
+                <h2 class="text-3xl font-bold text-slate-800 mb-8">System Overview</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border-b-4 border-green-500">
+                        <p class="text-gray-400 text-sm font-bold uppercase">All-Time Sales</p>
+                        <h3 class="text-2xl font-black text-slate-800">TSH <span x-text="formatMoney(getLocationTotal('all'))"></span></h3>
+                    </div>
+                    <div class="stat-card bg-white p-6 rounded-xl shadow-sm border-b-4 border-blue-500">
+                        <p class="text-gray-400 text-sm font-bold uppercase">Inventory Items</p>
+                        <h3 class="text-2xl font-black text-slate-800" x-text="inventory.length"></h3>
+                    </div>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b font-bold">Sales by Location</div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 p-4 gap-4">
+                        <template x-for="loc in locations" :key="loc">
+                            <div class="flex justify-between items-center p-3 border rounded-lg bg-slate-50">
+                                <span class="text-sm font-medium text-slate-600" x-text="loc"></span>
+                                <span class="font-bold text-green-600" x-text="formatMoney(getLocationTotal(loc))"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </section>
+
+            <section x-show="view === 'sales'" class="max-w-2xl bg-white p-8 rounded-2xl shadow-lg mx-auto">
+                <h3 class="text-2xl font-bold mb-6 text-slate-800 border-b pb-4">Record Daily Sale</h3>
+                <div class="space-y-4">
+                    <select x-model="saleEntry.location" class="w-full p-3 border rounded-xl">
+                        <option value="">Choose Delivery Location</option>
+                        <template x-for="loc in locations" :key="loc"><option :value="loc" x-text="loc"></option></template>
+                    </select>
+                    <select x-model="saleEntry.itemIndex" @change="updateSalePrice()" class="w-full p-3 border rounded-xl">
+                        <option value="">Select Goods</option>
+                        <template x-for="(item, idx) in inventory" :key="idx"><option :value="idx" x-text="item.name"></option></template>
+                    </select>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="number" x-model="saleEntry.qty" placeholder="Quantity" class="p-3 border rounded-xl">
+                        <input type="number" x-model="saleEntry.price" placeholder="Price" class="p-3 border rounded-xl bg-slate-50">
+                    </div>
+                    <button @click="addSale()" class="w-full bg-green-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-green-700 transition">POST SALE RECORD</button>
+                </div>
+            </section>
+
+            <section x-show="view === 'purchases'" class="max-w-2xl bg-white p-8 rounded-2xl shadow-lg mx-auto">
+                <h3 class="text-2xl font-bold mb-6 text-slate-800 border-b pb-4">Record Purchase</h3>
+                <div class="space-y-4">
+                    <input type="text" x-model="purchaseEntry.name" placeholder="Item Name" class="w-full p-3 border rounded-xl">
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="number" x-model="purchaseEntry.qty" placeholder="Quantity" class="p-3 border rounded-xl">
+                        <input type="number" x-model="purchaseEntry.price" placeholder="Total TSH" class="p-3 border rounded-xl">
+                    </div>
+                    <button @click="addPurchase()" class="w-full bg-slate-800 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-slate-700 transition">POST PURCHASE RECORD</button>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        function hjsApp() {
+            return {
+                isLoggedIn: false, role: null, view: 'dashboard', timeFrame: 'Yearly',
+                loginForm: { user: '', pass: '' }, loginError: false,
+                locations: ['Bravo coco', 'Karambezi', 'Moyo Masaki', 'Moyo Mbezi', 'Slip Way', 'Fish Market', 'Protea', 'Waves', 'Mummy Water', 'Amafi', 'Serena', 'Merry Brown', 'Southern Sun', 'Le Grande', 'Panarot', 'Ramada', 'Sea Cliff'],
+                inventory: [
+                    { name: '1.AVOCADO', unit: 'PC', price: 2000 },
+                    { name: '2.BABY CARROT', unit: 'PKT', price: 7000 },
+                    { name: '3.BABY CORN', unit: 'PKT', price: 8000 },
+                    { name: '4.BABY CUCUMBER', unit: 'KG', price: 2000 },
+                    { name: '5.BABY POTATO', unit: 'KG', price: 2000 },
+                    { name: '6.BANANA BUKOBA', unit: 'PC', price: 400 },
+                    { name: '7.BANANA LEAF', unit: 'KG', price: 1500 },
+                    { name: '8.BANANA MZUZU', unit: 'PC', price: 500 },
+                     { name: '9.BASIL', unit: 'BUNCH', price: 1000 },
+                    { name: '10.BETROOT', unit: 'KG', price: 3000 },
+                    { name: '11.BOK CHOY', unit: 'KG', price: 7000 },
+                    { name: '12.BOTTOM MUSHROOM', unit: 'KG', price: 36000 },
+                    { name: '13.BROCCOLI', unit: 'KG', price: 5000 },
+                    { name: '14.BUTTERNUT', unit: 'KG', price: 3000 },
+                    { name: '15.CARROT', unit: 'KG', price: 2000 },
+                    { name: '16.CASSAVA LEAVES', unit: 'KG', price: 3000 },
+                     { name: '17.CASSAVA ROOT', unit: 'KG', price: 2000 },
+                    { name: '18.CELERY', unit: 'BUNCH', price: 1000 },
+                    { name: '19.CHERRY TOMATO', unit: 'PKT', price: 4500 },
+                    { name: '20.CHILLI MBUZI', unit: 'KG', price: 4000 },
+                    { name: '21.CHINESE CABBAGE IMPORTED', unit: 'KG', price: 3000 },
+                    { name: '22.CHOROKO', unit: 'KG', price: 5000 },
+                    { name: '23.COCONUT YOUNG', unit: 'PC', price: 1000 },
+                    { name: '24.CORRIANDER', unit: 'BUNCH', price: 1000 },
+                     { name: '25.COURLIFLOWER', unit: 'KG', price: 5000 },
+                    { name: '26.CUCUMBER', unit: 'KG', price: 1500 },
+                    { name: '28.CURRY LEAVES', unit: 'BUNCH', price: 1000 },
+                    { name: '29.DAGAA(BUKOBA)', unit: 'KG', price: 13000 },
+                    { name: '30.DAGAA(KIGOMA)', unit: 'KG', price: 50000 },
+                    { name: '31.DRY COCONUT', unit: 'PC', price: 1500 },
+                    { name: 'DRY BEANS', unit: 'KG', price: 4000 },
+                    { name: '33.EGG PLANT', unit: 'KG', price: 1500 },
+                     { name: '34.EGGS', unit: 'TRAY', price: 10000 },
+                    { name: '35.FRESH CHIPS', unit: 'KG', price: 3000 },
+                    { name: '36.FRESH LEMON', unit: 'KG', price: 2500 },
+                    { name: '38.FRESH LIME', unit: 'KG', price: 2500 },
+                    { name: '39.FRESH TOMATO', unit: 'KG', price: 1700 },
+                    { name: '40.GINGER ROOT', unit: 'KG', price: 2500 },
+                    { name: '41.GRAPES GREEN IMPORED', unit: 'PKT', price: 10000 },
+                    { name: '42.GRAPES RED IMPORTED', unit: 'KG', price: 10000 },
+                    { name: '43.GREEN BEANS', unit: 'KG', price: 3000 },
+                    { name: '44.GREEN CHILI', unit: 'KG', price: 6000 },
+                    { name: '45.GREEN PEAS', unit: 'KG', price: 7000 },
+                    { name: '46.GREEN PAPPER', unit: 'KG', price: 2000 },
+                    { name: '48.GROUND NUTS', unit: 'KG', price: 6000 },
+                    { name: '49.GUAVA', unit: 'KG', price: 6000 },
+                    { name: '50.ICE BURG LETTUCE', unit: 'KG', price: 2500 },
+                    { name: '51.IMPORTED LEMON', unit: 'KG', price: 8000 },
+                    { name: '52.IMPORTED ORANGE', unit: 'KG', price: 9000 },
+                    { name: '53.JACK FRUIT', unit: 'KG', price: 1500 },
+                    { name: '54.KIWI', unit: 'PC', price: 2500 },
+                    { name: '55.LEEKS', unit: 'BUNCH', price: 1000 },
+                    { name: '56.LEMON GRASS', unit: 'BUNCH', price: 1000 },
+                    { name: '57.LOCAL ORANGE', unit: 'PC', price: 300 },
+                    { name: '58.LOCAL SPINACH', unit: 'BUNCH', price: 800 },
+                    { name: '59.MAHINDI YA MAKANDE', unit: 'KG', price: 3000 },
+                    { name: '60.MAIZE CORN FRESH', unit: 'KG', price: 2000 },
+                    { name: '61.MAJANI YA KUNDE', unit: 'KG', price: 2000 },
+                    { name: '62.MANGO RAW', unit: 'PC', price: 1000 },
+                    { name: '63.MANGO RIPE', unit: 'PC', price: 1000 },
+                    { name: '64.MATEMBELE LEAVES', unit: 'BUNCH', price: 800 },
+                    { name: '65.MCHICHA LEAVES', unit: 'BUNCH', price: 800 },
+                    { name: '66.MICRO HERBS', unit: 'PKT', price: 800 },
+                    { name: '67.MINT LEAVES', unit: 'BUNCH', price: 1000 },
+                    { name: '68.MIXED LETTUCE', unit: 'PKT', price: 7000 },
+                    { name: '69.MNAVU LEAVES', unit: 'KG', price: 2000 },
+                    { name: '70.MONKEY BANANA', unit: 'PC', price: 200 },
+                    { name: '71.NYANYA CHUNGU', unit: 'KG', price: 2500 },
+                    { name: '72.OKRA', unit: 'KG', price: 2500 },
+                    { name: '73.OYSTER MUSHROOM', unit: 'KG', price: 12000 },
+                    { name: '74.PALM HEART', unit: 'KG', price: 12000 },
+                    { name: '75.PAPAYA RAW', unit: 'KG', price: 3000 },
+                     { name:'76.PAPAYA RIPE', unit: 'PC', price: 3000 },
+                    { name: '77.PARSLEY', unit: 'BUNCH', price: 1000 },
+                    { name: '78.PASSION FRUIT ', unit: 'KG', price: 3000 },
+                    { name: '79.PEELED GARLIC', unit: 'KG', price: 10000 },
+                    { name: '80.PINEAPPLE FRUIT', unit: 'PC', price: 3000 },
+                    { name: '81.POTATO LARGE', unit: 'KG', price: 1800 },
+                    { name: '82.PUMKIN', unit: 'KG', price: 1500 },
+                    { name: '83.PUMKIN LEAVES', unit: 'BUNCH', price: 800 },
+                     { name: '84.RED APPLE', unit: 'PC', price: 1000 },
+                    { name: '85.RED CABBAGE', unit: 'KG', price: 3000 },
+                    { name: '86.RED CHILLI', unit: 'KG', price: 6000 },
+                    { name: '87.RED ONION', unit: 'KG', price: 2000 },
+                    { name: '88.RED PEPPER', unit: 'KG', price: 7500 },
+                    { name: '89.ROSELLA', unit: 'KG', price: 8000 },
+                    { name: '90.ROSEMARY', unit: 'BUNCH', price: 1000 },
+                    { name: '91.SOFT LETTUCE', unit: 'KG', price: 5000 },
+                     { name:'92.SPRING ONION', unit: 'BUNCH', price: 1000 },
+                    { name: '93.STRAWBERRY', unit: 'PKT', price: 6000 },
+                    { name: '94.SUPER RICE', unit: 'KG', price: 3000 },
+                    { name: '95.SWEET MELON', unit: 'PC', price: 5000 },
+                    { name: '96.SWEET POTATO', unit: 'KG', price: 2500 },
+                    { name: '97.UBUYU', unit: 'KG', price: 6000 },
+                    { name: '98.UKWAJU', unit: 'KG', price: 6000 },
+                    { name: '99.WATER MELON', unit: 'PC', price: 7000 },
+                    { name: '100.WHITE CABBAGE', unit: 'PC', price: 2000 },
+                    { name: '101.WHITE ONION', unit: 'KG', price: 5500 },
+                     { name: '102.YAM POTATO', unit: 'KG', price: 2500 },
+                    { name: '103.YELLOW BANANA', unit: 'KG', price: 500 },
+                    { name: '104.YELLOW PEPPER', unit: 'KG', price: 7500 },
+                    { name: '105.ZUCHINI', unit: 'KG', price: 2500 },
+                ],
+                salesRecords: [],
+                purchaseRecords: [],
+                saleEntry: { location: '', itemIndex: '', qty: 1, price: 0 },
+                purchaseEntry: { name: '', qty: 1, price: 0 },
+
+                showInvModal: false, editingIndex: null,
+                invForm: { name: '', unit: '', price: 0 },
+
+                openInventoryModal() { this.editingIndex = null; this.invForm = { name: '', unit: '', price: 0 }; this.showInvModal = true; },
+                editInventoryItem(index) { this.editingIndex = index; this.invForm = { ...this.inventory[index] }; this.showInvModal = true; },
+                saveInventoryItem() {
+                    if (this.editingIndex !== null) this.inventory[this.editingIndex] = { ...this.invForm };
+                    else this.inventory.push({ ...this.invForm });
+                    this.showInvModal = false;
+                },
+                deleteInventoryItem(index) { if (confirm("Delete?")) this.inventory.splice(index, 1); },
+
+                login() {
+                    if(this.loginForm.user === 'admin' && this.loginForm.pass === 'admin123') { this.isLoggedIn = true; this.role = 'admin'; }
+                    else if (this.loginForm.user === 'worker' && this.loginForm.pass === 'worker123') { this.isLoggedIn = true; this.role = 'worker'; }
+                    else { this.loginError = true; }
+                },
+                logout() { this.isLoggedIn = false; this.view = 'dashboard'; },
+
+                updateSalePrice() {
+                    if(this.saleEntry.itemIndex !== '' && this.inventory[this.saleEntry.itemIndex]) {
+                        this.saleEntry.price = this.inventory[this.saleEntry.itemIndex].price;
+                    }
+                },
+                addSale() {
+                    if(this.saleEntry.itemIndex === '' || !this.saleEntry.location) return alert("Fill all fields");
+                    const item = this.inventory[this.saleEntry.itemIndex];
+                    this.salesRecords.push({
+                        id: Date.now(), date: new Date(), location: this.saleEntry.location,
+                        itemName: item.name, qty: this.saleEntry.qty, unit: item.unit,
+                        total: this.saleEntry.qty * this.saleEntry.price
+                    });
+                    this.saleEntry = { location: '', itemIndex: '', qty: 1, price: 0 };
+                    alert("Sale Recorded!");
+                },
+                addPurchase() {
+                    if(!this.purchaseEntry.name) return alert("Enter item name");
+                    this.purchaseRecords.push({
+                        id: Date.now(), date: new Date(), name: this.purchaseEntry.name,
+                        qty: this.purchaseEntry.qty, total: parseFloat(this.purchaseEntry.price)
+                    });
+                    this.purchaseEntry = { name: '', qty: 1, price: 0 };
+                    alert("Purchase Recorded!");
+                },
+
+                getFilteredRecords(type) {
+                    const data = type === 'sales' ? this.salesRecords : this.purchaseRecords;
+                    const now = new Date();
+                    return data.filter(record => {
+                        const rDate = new Date(record.date);
+                        if (this.timeFrame === 'Daily') return rDate.toDateString() === now.toDateString();
+                        if (this.timeFrame === 'Weekly') return (now - rDate) <= (7 * 24 * 60 * 60 * 1000);
+                        if (this.timeFrame === 'Monthly') return rDate.getMonth() === now.getMonth() && rDate.getFullYear() === now.getFullYear();
+                        if (this.timeFrame === 'Yearly') return rDate.getFullYear() === now.getFullYear();
+                        return true;
+                    });
+                },
+                getFilteredTotal(type) { return this.getFilteredRecords(type).reduce((sum, r) => sum + r.total, 0); },
+                getLocationTotal(loc) {
+                    if(loc === 'all') return this.salesRecords.reduce((sum, r) => sum + r.total, 0);
+                    return this.salesRecords.filter(r => r.location === loc).reduce((sum, r) => sum + r.total, 0);
+                },
+                formatMoney(val) { return new Intl.NumberFormat('en-US').format(val); },
+                init() { console.log("HJS Insights Restored"); }
+            }
+        }
+    </script>
+</body>
+</html>
